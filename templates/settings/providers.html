@@ -1,0 +1,328 @@
+{% extends 'base.html' %}
+{% load widget_tweaks %}
+{% block title %}Provider Settings — VoiceTasks{% endblock %}
+
+{% block content %}
+<div class="px-4 sm:px-6 py-6 space-y-6">
+
+  <!-- Page header -->
+  <div>
+    <h1 class="text-xl font-semibold text-stone-900">Provider Settings</h1>
+    <p class="text-sm text-stone-500 mt-0.5">Configure ASR (speech recognition) and LLM (language model) providers</p>
+  </div>
+
+  <!-- No providers warning -->
+  {% if not asr_providers and not llm_providers %}
+  <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
+    <svg class="h-5 w-5 text-amber-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+    </svg>
+    <div>
+      <p class="text-sm font-medium text-amber-800">No provider configured</p>
+      <p class="text-xs text-amber-700 mt-0.5">
+        The app uses a built-in <strong>mock provider</strong> by default — no API keys needed.
+        Add a real provider below to enable live transcription and AI task extraction.
+      </p>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- ================================================================
+       Two-column layout: ASR + LLM
+       ================================================================ -->
+  <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+
+    <!-- ASR Providers -->
+    <div class="space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-stone-700 flex items-center gap-2">
+          <span class="inline-flex h-6 w-6 items-center justify-center rounded-md bg-blue-100">
+            <svg class="h-3.5 w-3.5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+            </svg>
+          </span>
+          Speech Recognition (ASR)
+        </h2>
+        <span class="text-xs text-stone-400">Active: mock (default)</span>
+      </div>
+
+      <!-- Existing ASR providers -->
+      {% for provider in asr_providers %}
+      <div class="rounded-xl border border-stone-200 bg-white shadow-card p-4 space-y-3"
+           x-data="{ editing: false, testing: false, testResult: null }">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-medium text-stone-900">{{ provider.get_provider_type_display }}</span>
+            {% if provider.is_active %}
+            <span class="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">Active</span>
+            {% endif %}
+          </div>
+          <div class="flex items-center gap-2">
+            <!-- Test connection button -->
+            <button @click="testConnection({{ provider.id }})"
+                    :disabled="testing"
+                    type="button"
+                    class="btn rounded-lg border border-stone-200 px-2.5 py-1 text-xs font-medium text-stone-600 hover:bg-stone-50 disabled:opacity-50">
+              <span x-show="!testing">Test</span>
+              <span x-show="testing">Testing...</span>
+            </button>
+            <!-- Edit toggle -->
+            <button @click="editing = !editing" type="button"
+                    class="btn rounded-lg border border-stone-200 px-2.5 py-1 text-xs font-medium text-stone-600 hover:bg-stone-50">
+              <span x-show="!editing">Edit</span>
+              <span x-show="editing">Cancel</span>
+            </button>
+            <!-- Delete -->
+            <form action="{% url 'settings_ui:provider_delete' provider.id %}" method="post"
+                  onsubmit="return confirm('Delete this provider configuration?')">
+              {% csrf_token %}
+              <button type="submit"
+                      class="btn rounded-lg border border-red-200 px-2.5 py-1 text-xs font-medium text-red-500 hover:bg-red-50">
+                Delete
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Test result -->
+        <div x-show="testResult !== null"
+             :class="testResult && testResult.success ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'"
+             class="rounded-lg border px-3 py-2 text-xs"
+             x-text="testResult ? testResult.message : ''">
+        </div>
+
+        <!-- Provider metadata -->
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          {% if provider.model %}
+          <div>
+            <span class="text-stone-400">Model</span>
+            <p class="font-mono text-stone-700 mt-0.5">{{ provider.model }}</p>
+          </div>
+          {% endif %}
+          {% if provider.endpoint %}
+          <div>
+            <span class="text-stone-400">Endpoint</span>
+            <p class="font-mono text-stone-600 truncate mt-0.5">{{ provider.endpoint }}</p>
+          </div>
+          {% endif %}
+        </div>
+
+        <!-- Edit form (inline) -->
+        <div x-show="editing" x-cloak class="border-t border-stone-100 pt-4 mt-1">
+          <form action="{% url 'settings_ui:provider_update' provider.id %}" method="post" class="space-y-3">
+            {% csrf_token %}
+            {% include 'settings/_provider_form_fields.html' with form=add_form provider=provider %}
+            <button type="submit"
+                    class="btn w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+              Save Changes
+            </button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+
+      <!-- Add new ASR provider -->
+      <div class="rounded-xl border border-dashed border-stone-300 bg-stone-50 p-4"
+           x-data="{ open: false }">
+        <button @click="open = !open"
+                type="button"
+                class="flex w-full items-center justify-center gap-2 text-sm font-medium text-stone-500 hover:text-stone-700">
+          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          <span x-text="open ? 'Cancel' : 'Add ASR Provider'"></span>
+        </button>
+
+        <div x-show="open" x-cloak class="mt-4">
+          <form action="{% url 'settings_ui:provider_create' %}" method="post" class="space-y-3">
+            {% csrf_token %}
+            <input type="hidden" name="category" value="ASR" />
+            {% include 'settings/_provider_form_fields.html' with form=add_form category='ASR' %}
+            <button type="submit"
+                    class="btn w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+              Add ASR Provider
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- LLM Providers -->
+    <div class="space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-stone-700 flex items-center gap-2">
+          <span class="inline-flex h-6 w-6 items-center justify-center rounded-md bg-violet-100">
+            <svg class="h-3.5 w-3.5 text-violet-600" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z" />
+            </svg>
+          </span>
+          Language Model (LLM)
+        </h2>
+        <span class="text-xs text-stone-400">Active: mock (default)</span>
+      </div>
+
+      <!-- Existing LLM providers -->
+      {% for provider in llm_providers %}
+      <div class="rounded-xl border border-stone-200 bg-white shadow-card p-4 space-y-3"
+           x-data="{ editing: false, testing: false, testResult: null }">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-medium text-stone-900">{{ provider.get_provider_type_display }}</span>
+            {% if provider.is_active %}
+            <span class="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">Active</span>
+            {% endif %}
+          </div>
+          <div class="flex items-center gap-2">
+            <button @click="testConnection({{ provider.id }})"
+                    :disabled="testing"
+                    type="button"
+                    class="btn rounded-lg border border-stone-200 px-2.5 py-1 text-xs font-medium text-stone-600 hover:bg-stone-50 disabled:opacity-50">
+              <span x-show="!testing">Test</span>
+              <span x-show="testing">Testing...</span>
+            </button>
+            <button @click="editing = !editing" type="button"
+                    class="btn rounded-lg border border-stone-200 px-2.5 py-1 text-xs font-medium text-stone-600 hover:bg-stone-50">
+              <span x-show="!editing">Edit</span>
+              <span x-show="editing">Cancel</span>
+            </button>
+            <form action="{% url 'settings_ui:provider_delete' provider.id %}" method="post"
+                  onsubmit="return confirm('Delete this provider configuration?')">
+              {% csrf_token %}
+              <button type="submit"
+                      class="btn rounded-lg border border-red-200 px-2.5 py-1 text-xs font-medium text-red-500 hover:bg-red-50">
+                Delete
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <div x-show="testResult !== null"
+             :class="testResult && testResult.success ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'"
+             class="rounded-lg border px-3 py-2 text-xs"
+             x-text="testResult ? testResult.message : ''">
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          {% if provider.model %}
+          <div>
+            <span class="text-stone-400">Model</span>
+            <p class="font-mono text-stone-700 mt-0.5">{{ provider.model }}</p>
+          </div>
+          {% endif %}
+          {% if provider.endpoint %}
+          <div>
+            <span class="text-stone-400">Endpoint</span>
+            <p class="font-mono text-stone-600 truncate mt-0.5">{{ provider.endpoint }}</p>
+          </div>
+          {% endif %}
+        </div>
+
+        <div x-show="editing" x-cloak class="border-t border-stone-100 pt-4 mt-1">
+          <form action="{% url 'settings_ui:provider_update' provider.id %}" method="post" class="space-y-3">
+            {% csrf_token %}
+            {% include 'settings/_provider_form_fields.html' with form=add_form provider=provider %}
+            <button type="submit"
+                    class="btn w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+              Save Changes
+            </button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+
+      <!-- Add new LLM provider -->
+      <div class="rounded-xl border border-dashed border-stone-300 bg-stone-50 p-4"
+           x-data="{ open: false }">
+        <button @click="open = !open"
+                type="button"
+                class="flex w-full items-center justify-center gap-2 text-sm font-medium text-stone-500 hover:text-stone-700">
+          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          <span x-text="open ? 'Cancel' : 'Add LLM Provider'"></span>
+        </button>
+
+        <div x-show="open" x-cloak class="mt-4">
+          <form action="{% url 'settings_ui:provider_create' %}" method="post" class="space-y-3">
+            {% csrf_token %}
+            <input type="hidden" name="category" value="LLM" />
+            {% include 'settings/_provider_form_fields.html' with form=add_form category='LLM' %}
+            <button type="submit"
+                    class="btn w-full rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-700">
+              Add LLM Provider
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mock provider info box -->
+  <div class="rounded-xl border border-stone-200 bg-stone-50 p-5">
+    <h3 class="text-sm font-semibold text-stone-700 mb-2">About the Mock Provider</h3>
+    <p class="text-sm text-stone-600 leading-relaxed">
+      VoiceTasks ships with a built-in <strong>mock provider</strong> that works with zero API keys.
+      It returns a sample transcription and pre-extracted tasks so you can explore the full UI immediately.
+      When you add a real ASR or LLM provider above and mark it as <em>active</em>, the mock is
+      automatically bypassed.
+    </p>
+    <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+      <div class="rounded-lg bg-white border border-stone-200 p-3">
+        <p class="font-semibold text-stone-700 mb-1">Supported ASR providers</p>
+        <ul class="text-stone-500 space-y-0.5">
+          <li>Mock (default, no key needed)</li>
+          <li>OpenAI Whisper</li>
+          <li>Azure Speech Services</li>
+          <li>Google Cloud Speech-to-Text</li>
+          <li>Custom OpenAI-compatible endpoint</li>
+        </ul>
+      </div>
+      <div class="rounded-lg bg-white border border-stone-200 p-3">
+        <p class="font-semibold text-stone-700 mb-1">Supported LLM providers</p>
+        <ul class="text-stone-500 space-y-0.5">
+          <li>Mock (default, no key needed)</li>
+          <li>OpenAI (GPT-4o, GPT-4, GPT-3.5)</li>
+          <li>Anthropic Claude</li>
+          <li>DeepSeek, Qwen, Groq, Mistral</li>
+          <li>Google Gemini, Azure OpenAI, Ollama</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Attach testConnection to all provider cards
+document.querySelectorAll('[x-data*="testing"]').forEach(el => {
+  // Handled via Alpine x-data in each card
+});
+
+// Global test connection helper called from Alpine
+async function testConnection(providerId) {
+  const result = await apiFetch('{% url "providers:test_connection" %}', { provider_id: providerId });
+  return result;
+}
+
+// Extend each card's Alpine component with test connection
+document.addEventListener('alpine:init', () => {
+  Alpine.data('providerCard', () => ({
+    editing: false,
+    testing: false,
+    testResult: null,
+    async testConnection(providerId) {
+      this.testing = true;
+      this.testResult = null;
+      try {
+        this.testResult = await apiFetch('{% url "providers:test_connection" %}', { provider_id: providerId });
+      } catch (e) {
+        this.testResult = { success: false, message: 'Network error.' };
+      } finally {
+        this.testing = false;
+      }
+    },
+  }));
+});
+</script>
+{% endblock %}

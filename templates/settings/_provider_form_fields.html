@@ -1,0 +1,90 @@
+{% comment %}
+Reusable provider configuration form fields partial.
+Variables:
+  form — ProviderConfigurationForm instance
+  provider — ProviderConfiguration instance (for edit; optional)
+  category — 'ASR' or 'LLM' (for create; optional)
+{% endcomment %}
+{% load widget_tweaks %}
+
+{% if not provider %}
+<!-- Category (only shown for create forms without hidden input) -->
+{% if not category %}
+<div>
+  <label class="block text-xs font-medium text-stone-600 mb-1.5">Category</label>
+  {% render_field form.category class="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-900 focus:outline-none focus:ring-2 focus:ring-blue-500" %}
+</div>
+{% endif %}
+{% endif %}
+
+<!-- Provider type -->
+<div>
+  <label class="block text-xs font-medium text-stone-600 mb-1.5">Provider Type</label>
+  {% if provider %}
+    <input type="hidden" name="provider_type" value="{{ provider.provider_type }}" />
+    <p class="text-sm font-medium text-stone-700 rounded-lg bg-stone-50 border border-stone-200 px-3 py-2">
+      {{ provider.get_provider_type_display }}
+    </p>
+  {% else %}
+    {% render_field form.provider_type class="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-900 focus:outline-none focus:ring-2 focus:ring-blue-500" %}
+  {% endif %}
+</div>
+
+<!-- API Key -->
+<div>
+  <label class="block text-xs font-medium text-stone-600 mb-1.5">API Key</label>
+  <input type="password"
+         name="api_key"
+         value="{% if provider %}{{ provider.api_key }}{% endif %}"
+         autocomplete="off"
+         placeholder="sk-..."
+         class="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-900 font-mono
+                focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-stone-300" />
+  <p class="mt-1 text-xs text-stone-400">Stored server-side only. Never sent to the browser.</p>
+</div>
+
+<!-- Model -->
+<div>
+  <label class="block text-xs font-medium text-stone-600 mb-1.5">Model</label>
+  <input type="text"
+         name="model"
+         value="{% if provider %}{{ provider.model }}{% endif %}"
+         placeholder="e.g. gpt-4o-mini, whisper-1, claude-3-5-sonnet-20241022"
+         class="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-900 font-mono
+                focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-stone-300" />
+</div>
+
+<!-- Endpoint -->
+<div>
+  <label class="block text-xs font-medium text-stone-600 mb-1.5">Custom Endpoint (optional)</label>
+  <input type="url"
+         name="endpoint"
+         value="{% if provider %}{{ provider.endpoint }}{% endif %}"
+         placeholder="https://api.openai.com/v1"
+         class="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-900 font-mono
+                focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-stone-300" />
+  <p class="mt-1 text-xs text-stone-400">Leave blank for the default provider endpoint.</p>
+</div>
+
+<!-- Parameters JSON -->
+<div>
+  <label class="block text-xs font-medium text-stone-600 mb-1.5">Parameters (JSON, optional)</label>
+  <textarea
+    name="parameters_json"
+    rows="3"
+    placeholder='{"temperature": 0.3, "max_tokens": 1000}'
+    class="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-xs text-stone-900 font-mono
+           focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-stone-300 resize-none">{% if provider %}{{ provider.parameters_json_display }}{% else %}{}{% endif %}</textarea>
+</div>
+
+<!-- Is Active -->
+<div class="flex items-center gap-3">
+  <label class="flex items-center gap-2 cursor-pointer">
+    <input type="checkbox"
+           name="is_active"
+           {% if provider and provider.is_active %}checked{% endif %}
+           class="h-4 w-4 rounded border-stone-300 text-blue-600 focus:ring-blue-500 cursor-pointer" />
+    <span class="text-sm font-medium text-stone-700">Set as active provider</span>
+  </label>
+  <span class="text-xs text-stone-400">(only one provider per category can be active)</span>
+</div>

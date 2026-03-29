@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}VoiceTasks{% endblock %}</title>
+
+  <!-- Tailwind CSS (CDN — replace with compiled build for production) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'Plus Jakarta Sans', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'Arial', 'sans-serif'],
+            mono: ['IBM Plex Mono', 'JetBrains Mono', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50:  '#eff6ff',
+              100: '#dbeafe',
+              500: '#3b82f6',
+              600: '#2563eb',
+              700: '#1d4ed8',
+            },
+          },
+          boxShadow: {
+            card: '0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04)',
+            'card-hover': '0 4px 12px 0 rgb(0 0 0 / 0.08), 0 2px 4px -1px rgb(0 0 0 / 0.06)',
+          },
+        },
+      },
+    };
+  </script>
+
+  <!-- Inter font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- Alpine.js -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <!-- HTMX -->
+  <script src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js"></script>
+
+  <!-- SortableJS -->
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+
+  {% block extra_head %}{% endblock %}
+
+  <style>
+    /* Smooth transitions respecting prefers-reduced-motion */
+    @media (prefers-reduced-motion: no-preference) {
+      .task-card { transition: box-shadow 0.15s ease, transform 0.15s ease; }
+      .task-card:hover { transform: translateY(-1px); }
+      .btn { transition: background-color 0.1s ease, opacity 0.1s ease; }
+      .sortable-ghost { opacity: 0.4; }
+      .sortable-chosen { box-shadow: 0 8px 24px rgb(0 0 0 / 0.12); }
+    }
+
+    /* Recording pulse animation */
+    @keyframes record-pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.7; transform: scale(1.05); }
+    }
+    .recording-pulse { animation: record-pulse 1.2s ease-in-out infinite; }
+
+    /* Kanban column scroll */
+    .kanban-column { min-height: 200px; }
+    .kanban-list { min-height: 60px; }
+
+    /* Custom scrollbar for kanban board */
+    .kanban-scroll::-webkit-scrollbar { height: 6px; }
+    .kanban-scroll::-webkit-scrollbar-track { background: transparent; }
+    .kanban-scroll::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+    .kanban-scroll::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+  </style>
+</head>
+
+<body class="h-full bg-stone-50 font-sans text-stone-900 antialiased" x-data="{ mobileMenuOpen: false }">
+
+  <!-- Top navigation -->
+  <header class="sticky top-0 z-40 border-b border-stone-200 bg-white/90 backdrop-blur-sm">
+    <div class="mx-auto flex h-14 max-w-screen-2xl items-center gap-4 px-4 sm:px-6">
+
+      <!-- Logo / App name -->
+      <a href="{% url 'core:dashboard' %}" class="flex shrink-0 items-center gap-2 font-semibold text-stone-900 hover:text-stone-700">
+        <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-600 text-white text-xs font-bold select-none">VT</span>
+        <span class="hidden sm:block">VoiceTasks</span>
+      </a>
+
+      <!-- Desktop nav links -->
+      <nav class="hidden md:flex items-center gap-1 ml-2">
+        {% for link in nav_links %}
+        <a href="{{ link.url }}"
+           class="rounded-md px-3 py-1.5 text-sm font-medium text-stone-600 hover:bg-stone-100 hover:text-stone-900 transition-colors
+                  {% if request.path == link.url %}bg-stone-100 text-stone-900{% endif %}">
+          {{ link.label }}
+        </a>
+        {% endfor %}
+      </nav>
+
+      <div class="flex-1"></div>
+
+      <!-- Quick action: new task -->
+      <button
+        id="quick-add-btn"
+        class="btn hidden sm:flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+        onclick="document.getElementById('quick-add-modal').classList.remove('hidden')"
+        type="button">
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+        </svg>
+        New Task
+      </button>
+
+      <!-- Settings link -->
+      <a href="{% url 'settings_ui:providers' %}"
+         class="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-stone-500 hover:bg-stone-100 hover:text-stone-700 transition-colors"
+         title="Provider Settings">
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28Z" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+        </svg>
+        <span class="hidden lg:block">Settings</span>
+      </a>
+
+      <!-- Mobile menu toggle -->
+      <button @click="mobileMenuOpen = !mobileMenuOpen"
+              class="md:hidden rounded-md p-1.5 text-stone-500 hover:bg-stone-100"
+              type="button" aria-label="Toggle menu">
+        <svg x-show="!mobileMenuOpen" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+        </svg>
+        <svg x-show="mobileMenuOpen" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+        </svg>
+      </button>
+    </div>
+
+    <!-- Mobile nav -->
+    <div x-show="mobileMenuOpen" x-transition class="md:hidden border-t border-stone-100 bg-white px-4 py-2">
+      {% for link in nav_links %}
+      <a href="{{ link.url }}" class="block rounded-md px-3 py-2 text-sm font-medium text-stone-600 hover:bg-stone-50 hover:text-stone-900">
+        {{ link.label }}
+      </a>
+      {% endfor %}
+    </div>
+  </header>
+
+  <!-- Django messages -->
+  {% if messages %}
+  <div class="mx-auto max-w-screen-2xl px-4 sm:px-6 pt-3" id="django-messages">
+    {% for message in messages %}
+    <div class="mb-2 flex items-center gap-3 rounded-lg px-4 py-3 text-sm font-medium
+                {% if message.tags == 'error' %}bg-red-50 text-red-700 border border-red-200
+                {% elif message.tags == 'success' %}bg-green-50 text-green-700 border border-green-200
+                {% elif message.tags == 'warning' %}bg-yellow-50 text-yellow-700 border border-yellow-200
+                {% else %}bg-blue-50 text-blue-700 border border-blue-200{% endif %}"
+         x-data x-init="setTimeout(() => $el.remove(), 5000)">
+      {{ message }}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Page content -->
+  <main class="mx-auto max-w-screen-2xl">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- Quick Add Task Modal -->
+  <div id="quick-add-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+       x-data="quickAddModal()"
+       @keydown.escape.window="close()">
+    <div class="w-full max-w-md rounded-xl bg-white shadow-xl border border-stone-200 p-6"
+         @click.outside="close()">
+      <div class="flex items-center justify-between mb-5">
+        <h2 class="text-base font-semibold text-stone-900">New Task</h2>
+        <button @click="close()" type="button" class="rounded-md p-1 text-stone-400 hover:text-stone-600 hover:bg-stone-100">
+          <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <form @submit.prevent="submitTask()" class="space-y-4">
+        {% csrf_token %}
+        <div>
+          <label class="block text-xs font-medium text-stone-600 mb-1.5">Title <span class="text-red-500">*</span></label>
+          <input x-model="title" type="text" maxlength="80" required autofocus
+                 class="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-900 placeholder-stone-400
+                        focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                 placeholder="What needs to be done?" />
+          <p class="mt-1 text-right text-xs text-stone-400" x-text="(title.length) + '/80'"></p>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-stone-600 mb-1.5">Description</label>
+          <textarea x-model="description" maxlength="200" rows="2"
+                    class="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-900 placeholder-stone-400
+                           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                    placeholder="Optional context..."></textarea>
+        </div>
+        <div class="flex gap-3">
+          <div class="flex-1">
+            <label class="block text-xs font-medium text-stone-600 mb-1.5">Priority</label>
+            <select x-model="priority"
+                    class="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-900
+                           focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="low">Low</option>
+              <option value="medium" selected>Medium</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+          <div class="flex-1">
+            <label class="block text-xs font-medium text-stone-600 mb-1.5">Status</label>
+            <select x-model="status"
+                    class="w-full rounded-lg border border-stone-200 bg-stone-50 px-3 py-2 text-sm text-stone-900
+                           focus:outline-none focus:ring-2 focus:ring-blue-500">
+              <option value="OPEN">Open</option>
+              <option value="PENDING">Pending</option>
+              <option value="IN_PROGRESS">In Progress</option>
+              <option value="REVIEW">Review</option>
+              <option value="COMPLETED">Completed</option>
+            </select>
+          </div>
+        </div>
+        <div x-show="errorMsg" class="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700" x-text="errorMsg"></div>
+        <div class="flex gap-2 pt-1">
+          <button type="button" @click="close()"
+                  class="flex-1 rounded-lg border border-stone-200 px-4 py-2 text-sm font-medium text-stone-600 hover:bg-stone-50">
+            Cancel
+          </button>
+          <button type="submit" :disabled="loading"
+                  class="flex-1 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+            <span x-show="!loading">Create Task</span>
+            <span x-show="loading">Creating...</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Global JS utilities -->
+  <script>
+    // CSRF token helper for fetch requests
+    function getCsrfToken() {
+      return document.cookie.split(';')
+        .find(c => c.trim().startsWith('csrftoken='))
+        ?.split('=')[1] || '';
+    }
+
+    async function apiFetch(url, data = {}, method = 'POST') {
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': getCsrfToken(),
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: method !== 'GET' ? JSON.stringify(data) : undefined,
+      });
+      return res.json();
+    }
+
+    function quickAddModal() {
+      return {
+        title: '',
+        description: '',
+        priority: 'medium',
+        status: 'OPEN',
+        loading: false,
+        errorMsg: '',
+        close() {
+          document.getElementById('quick-add-modal').classList.add('hidden');
+          this.title = '';
+          this.description = '';
+          this.priority = 'medium';
+          this.status = 'OPEN';
+          this.errorMsg = '';
+        },
+        async submitTask() {
+          if (!this.title.trim()) { this.errorMsg = 'Title is required.'; return; }
+          this.loading = true;
+          this.errorMsg = '';
+          try {
+            const result = await apiFetch('{% url "tasks:task_create" %}', {
+              title: this.title,
+              description: this.description,
+              priority: this.priority,
+              status: this.status,
+            });
+            if (result.task) {
+              this.close();
+              window.location.reload();
+            } else {
+              this.errorMsg = result.error || 'Failed to create task.';
+            }
+          } catch (e) {
+            this.errorMsg = 'Network error. Please try again.';
+          } finally {
+            this.loading = false;
+          }
+        },
+      };
+    }
+  </script>
+
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>

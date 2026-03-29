@@ -1,0 +1,135 @@
+{% extends 'base.html' %}
+{% load voicetasks_extras %}
+{% block title %}Voice History — VoiceTasks{% endblock %}
+
+{% block content %}
+<div class="px-4 sm:px-6 py-6 space-y-5">
+
+  <!-- Page header -->
+  <div>
+    <h1 class="text-xl font-semibold text-stone-900">Voice History</h1>
+    <p class="text-sm text-stone-500 mt-0.5">Past voice recordings and their transcriptions</p>
+  </div>
+
+  <!-- Empty state -->
+  {% if not voice_notes %}
+  <div class="rounded-xl border border-stone-200 bg-white shadow-card p-12 text-center">
+    <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-stone-100">
+      <svg class="h-7 w-7 text-stone-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+      </svg>
+    </div>
+    <h2 class="text-base font-semibold text-stone-700">No voice recordings yet</h2>
+    <p class="mt-1.5 text-sm text-stone-500 max-w-sm mx-auto">
+      Record your first voice note on the dashboard and it will appear here.
+    </p>
+    <a href="{% url 'core:dashboard' %}"
+       class="mt-5 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+      <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+      </svg>
+      Go to Dashboard
+    </a>
+  </div>
+
+  {% else %}
+
+  <!-- Voice notes list -->
+  <div class="space-y-3">
+    {% for note in voice_notes %}
+    <div class="rounded-xl border border-stone-200 bg-white shadow-card p-5"
+         x-data="voiceHistoryCard({{ note.id }}, {{ note.transcription|tojson }})"
+    >
+      <div class="flex items-start justify-between gap-4 flex-wrap">
+        <div class="flex items-center gap-3">
+          <!-- Icon -->
+          <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-50">
+            <svg class="h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke-width="1.75" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
+            </svg>
+          </div>
+          <div>
+            <p class="text-xs font-medium text-stone-900">
+              Voice Note #<span class="font-mono tabular-nums">{{ note.id }}</span>
+            </p>
+            <p class="text-xs text-stone-400 font-mono tabular-nums mt-0.5">
+              {{ note.created_at|date:"M d, Y" }} at {{ note.created_at|time:"H:i" }}
+              &middot; <span class="uppercase">{{ note.language }}</span>
+            </p>
+          </div>
+        </div>
+
+        <!-- Audio player -->
+        {% if note.audio_file %}
+        <audio controls class="h-8 rounded" style="max-width:240px;">
+          <source src="{{ note.audio_file.url }}" />
+          Your browser does not support audio playback.
+        </audio>
+        {% endif %}
+      </div>
+
+      <!-- Transcription -->
+      <div class="mt-4">
+        <p class="text-xs font-medium text-stone-500 mb-1.5">Transcription</p>
+        {% if note.transcription %}
+        <div class="rounded-lg bg-stone-50 border border-stone-100 px-4 py-3 text-sm text-stone-700 leading-relaxed">
+          {{ note.transcription }}
+        </div>
+        {% else %}
+        <p class="text-sm text-stone-400 italic">No transcription available.</p>
+        {% endif %}
+      </div>
+
+      <!-- Re-extract tasks action -->
+      {% if note.transcription %}
+      <div class="mt-4 flex items-center gap-3">
+        <button
+          x-data
+          @click="reExtract('{{ note.transcription|escapejs }}')"
+          class="btn flex items-center gap-1.5 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50">
+          <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09Z" />
+          </svg>
+          Re-extract tasks
+        </button>
+        <span class="text-xs text-stone-400">Sends this transcription to the dashboard</span>
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function voiceHistoryCard(noteId, transcription) {
+  return {
+    noteId,
+    transcription,
+    async reExtract(text) {
+      // Store in sessionStorage and redirect to dashboard
+      sessionStorage.setItem('vt_prefill_transcription', text);
+      window.location.href = '{% url "core:dashboard" %}';
+    },
+  };
+}
+
+// On dashboard load: check for prefilled transcription
+document.addEventListener('DOMContentLoaded', () => {
+  const prefill = sessionStorage.getItem('vt_prefill_transcription');
+  if (prefill) {
+    sessionStorage.removeItem('vt_prefill_transcription');
+    // If Alpine dashboard component is present, set the transcription
+    setTimeout(() => {
+      const dashboardEl = document.querySelector('[x-data*="dashboard"]');
+      if (dashboardEl && dashboardEl._x_dataStack) {
+        // Not easy to reach Alpine internals, use a custom event instead
+      }
+    }, 100);
+  }
+});
+</script>
+{% endblock %}
