@@ -10,6 +10,7 @@ import json
 
 from django.shortcuts import render
 
+from apps.providers.models import ProviderConfiguration
 from apps.tasks.models import Task
 from apps.voice.models import VoiceNote
 
@@ -39,6 +40,14 @@ def dashboard(request):
 
     recent_voice_notes = list(VoiceNote.objects.order_by('-created_at')[:5])
 
+    active_asr_provider = (
+        ProviderConfiguration.objects.filter(
+            category=ProviderConfiguration.CATEGORY_ASR,
+            is_active=True,
+        ).values_list('provider_type', flat=True).first()
+        or 'mock'
+    )
+
     task_counts = {status: len(tasks) for status, tasks in tasks_by_status.items()}
     total_tasks = sum(task_counts.values())
 
@@ -59,5 +68,6 @@ def dashboard(request):
             'status_labels': status_labels,
             'task_counts': task_counts,
             'total_tasks': total_tasks,
+            'active_asr_provider': active_asr_provider,
         },
     )

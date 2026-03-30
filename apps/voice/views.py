@@ -9,6 +9,8 @@ from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_GET, require_POST
 
+from apps.providers.models import ProviderConfiguration
+
 from .models import VoiceNote
 from .services import ASRService
 
@@ -72,7 +74,19 @@ def transcribe(request):
         language=language,
     )
 
-    transcription = _asr_service.transcribe(audio_file, language=language)
+    pre_transcribed = request.POST.get('transcription', '').strip()
+    active_asr_type = (
+        ProviderConfiguration.objects.filter(
+            category=ProviderConfiguration.CATEGORY_ASR,
+            is_active=True,
+        ).values_list('provider_type', flat=True).first()
+    )
+
+    if pre_transcribed and active_asr_type == 'web_speech_api':
+        transcription = pre_transcribed
+    else:
+        transcription = _asr_service.transcribe(audio_file, language=language)
+
     voice_note.transcription = transcription
     voice_note.save(update_fields=['transcription'])
 

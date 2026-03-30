@@ -13,6 +13,8 @@ from .adapters.base import BaseASRAdapter, BaseLLMAdapter
 from .adapters.mock import MockASRAdapter, MockLLMAdapter
 from .adapters.openai_asr import OpenAIASRAdapter
 from .adapters.openai_llm import OpenAILLMAdapter
+from .adapters.vosk_asr import VoskASRAdapter
+from .adapters.web_speech import WebSpeechASRAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +32,8 @@ class ProviderFactory:
         'mock': MockASRAdapter,
         'openai_whisper': OpenAIASRAdapter,
         'custom_asr': OpenAIASRAdapter,  # Custom OpenAI-compatible endpoints
+        'vosk': VoskASRAdapter,
+        'web_speech_api': WebSpeechASRAdapter,
     }
 
     # Mapping from provider_type slug to LLM adapter class

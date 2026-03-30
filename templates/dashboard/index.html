@@ -3,7 +3,7 @@
 {% block title %}Dashboard — VoiceTasks{% endblock %}
 
 {% block content %}
-<div class="px-4 sm:px-6 py-6 space-y-6" x-data="dashboard()">
+<div class="px-4 sm:px-6 py-6 space-y-6" x-data="dashboard('{{ active_asr_provider }}')">
 
   <!-- Page header -->
   <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -284,7 +284,10 @@ window.STATUS_COLUMNS = ['OPEN','PENDING','IN_PROGRESS','REVIEW','COMPLETED'];
 // ============================================================
 // Dashboard Alpine component
 // ============================================================
-function dashboard() {
+function dashboard(activeAsr) {
+  const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const useWebSpeech = activeAsr === 'web_speech_api' && !!SpeechRecognitionAPI;
+
   return {
     language: 'en',
     recording: false,
@@ -297,6 +300,9 @@ function dashboard() {
     recordingTimer: null,
     mediaRecorder: null,
     audioChunks: [],
+    // Web Speech API state
+    recognition: null,
+    _webSpeechFinalText: '',
 
     extracting: false,
     extractedTasks: [],
@@ -336,8 +342,35 @@ function dashboard() {
         };
         this.mediaRecorder.onstop = () => this.handleRecordingStop(stream);
         this.mediaRecorder.start(100);
+
+        if (useWebSpeech) {
+          this._webSpeechFinalText = '';
+          this.transcription = '';
+          this.recognition = new SpeechRecognitionAPI();
+          this.recognition.continuous = true;
+          this.recognition.interimResults = true;
+          this.recognition.lang = this.language;
+          this.recognition.onresult = (event) => {
+            let interim = '';
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+              const result = event.results[i];
+              if (result.isFinal) {
+                this._webSpeechFinalText += result[0].transcript;
+              } else {
+                interim += result[0].transcript;
+              }
+            }
+            // Show live: confirmed text + italic interim hint
+            this.transcription = this._webSpeechFinalText + (interim ? interim : '');
+          };
+          this.recognition.onerror = () => {};
+          this.recognition.start();
+        }
+
         this.recording = true;
-        this.statusMessage = 'Recording — speak clearly.';
+        this.statusMessage = useWebSpeech
+          ? 'Recording — transcribing in real time.'
+          : 'Recording — speak clearly.';
         this.recordingSeconds = 0;
         this.recordingTimer = setInterval(() => this.recordingSeconds++, 1000);
       } catch (err) {
@@ -347,10 +380,20 @@ function dashboard() {
 
     async stopRecording() {
       if (this.mediaRecorder && this.recording) {
-        this.mediaRecorder.stop();
         this.recording = false;
         clearInterval(this.recordingTimer);
         this.statusMessage = 'Processing...';
+
+        if (useWebSpeech && this.recognition) {
+          // Wait for SpeechRecognition to finish and fire final results
+          await new Promise(resolve => {
+            this.recognition.onend = resolve;
+            this.recognition.stop();
+          });
+          this.transcription = this._webSpeechFinalText.trim();
+        }
+
+        this.mediaRecorder.stop();
       }
     },
 
@@ -371,6 +414,12 @@ function dashboard() {
         formData.append('audio', this.audioBlob, 'recording.webm');
         formData.append('language', this.language);
 
+        // For Web Speech API, send the browser-transcribed text so the
+        // server skips ASR and just stores the audio + transcription.
+        if (useWebSpeech && this.transcription) {
+          formData.append('transcription', this.transcription);
+        }
+
         const res = await fetch('{% url "voice:transcribe" %}', {
           method: 'POST',
           headers: {
@@ -381,8 +430,13 @@ function dashboard() {
         });
         const data = await res.json();
         if (data.transcription !== undefined) {
-          this.transcription = data.transcription;
-          this.statusMessage = data.transcription ? '' : 'Empty transcription — try speaking more clearly.';
+          // For Web Speech, keep what we already have; for server-side, use response
+          if (!useWebSpeech) {
+            this.transcription = data.transcription;
+          }
+          if (!this.transcription) {
+            this.statusMessage = 'Empty transcription — try speaking more clearly.';
+          }
         } else {
           this.statusMessage = data.error || 'Transcription failed.';
         }

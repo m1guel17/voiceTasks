@@ -27,6 +27,8 @@ class ProviderConfiguration(models.Model):
     PROVIDER_TYPE_CHOICES = [
         # ASR providers
         ('mock', 'Mock / Test'),
+        ('vosk', 'Vosk (Offline)'),
+        ('web_speech_api', 'Web Speech API (Browser)'),
         ('openai_whisper', 'OpenAI Whisper'),
         ('azure_speech', 'Azure Speech'),
         ('google_speech', 'Google Cloud Speech'),

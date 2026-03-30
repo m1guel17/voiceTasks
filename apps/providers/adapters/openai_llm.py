@@ -82,10 +82,10 @@ class OpenAILLMAdapter(BaseLLMAdapter):
 
                         REGLAS IMPORTANTES:
                         1. Incluso si el usuario no menciona tareas explícitamente, debes inferir qué acciones podrían derivarse del texto.
-                        2. Divide el contenido en múltiples tareas si hay diferentes acciones o temas.
+                        2. Divide el contenido en múltiples tareas si hay diferentes acciones o temas (minimo 5 tareas a menos que explicitamente te digan un numero determinado de tareas).
                         3. Cada tarea debe tener un título claro y conciso (máximo 80 caracteres).
                         4. La descripción debe explicar brevemente qué hacer (máximo 200 caracteres).
-                        5. Asigna prioridad: "low", "medium" o "high" basándote en la urgencia implícita.
+                        5. Asigna prioridad: "low", "medium" o "high" basándote en la urgencia implícita. Prioridad "high" debe ser para la primera tarea a realizar.
                         6. Responde ÚNICAMENTE con un JSON válido con esta estructura:
                         {
                             "tasks": [
